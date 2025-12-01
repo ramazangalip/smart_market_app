@@ -1,5 +1,3 @@
-# views/calisan_view.py (SON VERSİYON: POS, Sipariş Yönetimi ve PDF Fatura)
-
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QTableWidget, 
     QTableWidgetItem, QLabel, QStackedWidget, QHeaderView, QLineEdit, 
@@ -8,8 +6,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from db_model import Urun, Siparis, Kullanici, Session ,Satis,SatisDetay
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func # SQL fonksiyonları için eklendi
-from datetime import datetime, date, timedelta # datetime ve date/timedelta eklendi
+from sqlalchemy import func # SQLAlchemy fonksiyonları için import
+from datetime import datetime, date, timedelta # date ve timedelta Dashboard için eklendi
 
 # ReportLab ve OS kütüphanelerini import ediyoruz
 from reportlab.lib.pagesizes import letter
@@ -23,7 +21,7 @@ class CalisanView(QWidget):
         super().__init__(parent)
         self.session = session
         self.current_user = current_user
-        self.satis_sepetic = {} # {'barkod': {'urun': UrunObj, 'adet': 1}}
+        self.satis_sepetic = {}
         self.satis_to_print = None 
         self.setup_ui()
     
@@ -35,9 +33,16 @@ class CalisanView(QWidget):
         menu_layout = QVBoxLayout(menu_widget)
         
         self.btn_dashboard = QPushButton("🏠 Dashboard")
-        self.btn_satis_ekrani = QPushButton("💵 Satış Ekranı (POS)")
+        self.btn_dashboard.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        
+        self.btn_satis_ekrani = QPushButton("💵 Satış Ekranı")
+        self.btn_satis_ekrani.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        
         self.btn_siparisler = QPushButton("📦 Gelen Siparişler")
+        self.btn_siparisler.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        
         self.btn_fatura = QPushButton("🧾 Fatura Oluştur")
+        self.btn_fatura.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
         
         menu_layout.addWidget(self.btn_dashboard)
         menu_layout.addWidget(self.btn_satis_ekrani)
@@ -53,7 +58,7 @@ class CalisanView(QWidget):
         main_layout.addWidget(self.stacked_content)
         
         # İçerik Sayfalarını Oluşturma
-        self.dashboard_page = self.create_dashboard_page() # GÜNCELLENDİ: Metodu çağırıyoruz
+        self.dashboard_page = self.create_dashboard_page() # Dashboard metodu çağrıldı
         self.satis_ekrani_page = self.create_satis_ekrani_page()
         self.siparisler_page = self.create_siparisler_page()
         self.fatura_page = self.create_fatura_page() 
@@ -72,7 +77,7 @@ class CalisanView(QWidget):
         
         self.stacked_content.setCurrentWidget(self.dashboard_page) # Başlangıç: Dashboard
     
-    # --- YENİ EKLENEN DASHBOARD METODU ---
+    # --- DASHBOARD METODU ---
     def create_dashboard_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -514,3 +519,56 @@ class CalisanView(QWidget):
         
         QMessageBox.information(self, "PDF Oluşturuldu", 
                                 f"Fatura başarıyla oluşturuldu: <b>{filename}</b>\nDosya konumu: {os.getcwd()}")
+    
+    def create_dashboard_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.addWidget(QLabel(f"<h2>Hoş Geldiniz, {self.current_user.kullanici_adi.capitalize()}</h2>"))
+        layout.addWidget(QLabel("<hr>"))
+        
+        try:
+            from sqlalchemy import func
+            from datetime import date, timedelta
+            
+            bugun = date.today()
+            
+            # 1. Günlük Satış Performansı
+            gunluk_satis_sayisi = self.session.query(Satis).filter(
+                Satis.calisan_id == self.current_user.id,
+                func.date(Satis.tarih) == bugun
+            ).count()
+            
+            gunluk_ciro = self.session.query(func.sum(Satis.toplam_tutar)).filter(
+                Satis.calisan_id == self.current_user.id,
+                func.date(Satis.tarih) == bugun
+            ).scalar() or 0.0
+
+            # 2. Yeni Bekleyen Siparişler (Çalışanın ilgilenmesi gereken)
+            bekleyen_siparis_sayisi = self.session.query(Siparis).filter(
+                Siparis.durum == 'Bekleniyor'
+            ).count()
+            
+            html_content = f"""
+            <div style="display: flex; justify-content: space-around; padding: 20px;">
+                <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #e6f7ff;">
+                    <h4>📅 Bugünki Satış Sayısı</h4>
+                    <p style="font-size: 24px; color: blue;"><b>{gunluk_satis_sayisi}</b> Adet</p>
+                </div>
+                <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #e6ffe6;">
+                    <h4>💰 Bugünki Ciro</h4>
+                    <p style="font-size: 24px; color: green;"><b>{gunluk_ciro:.2f}</b> ₺</p>
+                </div>
+                <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #fff0e6;">
+                    <h4>📦 Yeni Siparişler</h4>
+                    <p style="font-size: 24px; color: #ff8c00;"><b>{bekleyen_siparis_sayisi}</b> Bekleyen</p>
+                </div>
+            </div>
+            """
+            
+            layout.addWidget(QLabel(html_content))
+            
+        except Exception as e:
+            layout.addWidget(QLabel(f"Dashboard verileri yüklenemedi: {e}"))
+            
+        layout.addStretch()
+        return page

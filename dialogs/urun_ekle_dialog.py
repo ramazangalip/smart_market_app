@@ -8,7 +8,7 @@ class UrunEkleDuzenleDialog(QDialog):
     def __init__(self, session, urun=None, parent=None):
         super().__init__(parent)
         self.session = session
-        self.urun = urun # Düzenleme modundaysa mevcut Ürün nesnesi
+        self.urun = urun 
         
         if self.urun:
             self.setWindowTitle("Ürün Düzenle")
@@ -25,13 +25,13 @@ class UrunEkleDuzenleDialog(QDialog):
         self.stok_input = QLineEdit()
         self.fiyat_input = QLineEdit()
 
-        # Eğer düzenleme modu ise, mevcut verileri yükle
+       
         if self.urun:
             self.isim_input.setText(self.urun.isim)
             self.barkod_input.setText(self.urun.barkod)
             self.stok_input.setText(str(self.urun.stok))
             self.fiyat_input.setText(str(self.urun.fiyat))
-            # Barkodu düzenlemeyi engelle (genellikle barkod birincil anahtar gibi davranır)
+            
             self.barkod_input.setReadOnly(True) 
 
         layout.addRow("Ürün Adı:", self.isim_input)
@@ -60,13 +60,13 @@ class UrunEkleDuzenleDialog(QDialog):
             
         try:
             if self.urun:
-                # Düzenleme Modu
+             
                 self.urun.isim = isim
                 self.urun.stok = stok
                 self.urun.fiyat = fiyat
                 QMessageBox.information(self, "Başarılı", f"'{isim}' ürünü güncellendi.")
             else:
-                # Yeni Ekleme Modu
+              
                 yeni_urun = Urun(isim=isim, barkod=barkod, stok=stok, fiyat=fiyat)
                 self.session.add(yeni_urun)
                 QMessageBox.information(self, "Başarılı", f"'{isim}' ürünü başarıyla eklendi.")

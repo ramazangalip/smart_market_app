@@ -1,21 +1,66 @@
-# views/musteri_view.py (SON VERSİYON)
-
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QLabel, QStackedWidget, QHeaderView, QLineEdit, QMessageBox, QWidget as QBtnWidget, QHBoxLayout as QBtnLayout
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer 
 from sqlalchemy.orm import joinedload
-# db_model'den gerekli tüm modelleri import edin
+from sqlalchemy import func 
 from db_model import Urun, Siparis, Kullanici, SiparisDetay
 from datetime import datetime
+import random 
 
 class MusteriView(QWidget):
+    bildirim_geldi = pyqtSignal(int)
+
     def __init__(self, session, current_user, parent=None):
         super().__init__(parent)
         self.session = session
         self.current_user = current_user
-        self.siparis_sepetic = {} # {'barkod': {'urun': UrunObj, 'adet': 1}}
+        self.siparis_sepetic = {} 
+        self.bildirimler = [] 
+        self.bildirim_sayaci = 0 
+        self.bildirilen_urunler = set() # YENİ: Bildirimi gönderilen ürün ID'lerini tutar
         
         self.setup_ui()
-    
+        self.start_bildirim_kontrol_timer()
+
+    def start_bildirim_kontrol_timer(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check_urun_bildirimleri)
+        self.timer.start(5000) # Her 5 saniyede bir kontrol et
+
+    def check_urun_bildirimleri(self):
+        try:
+            urunler = self.session.query(Urun).filter(Urun.stok > 0).all()
+            yeni_bildirim_sayisi = 0
+            
+            for urun in urunler:
+                # Sadece stoğu kritik seviyede (1-10 arası) olan ürünler için bildirim gönder
+                if urun.stok > 0 and urun.stok <= 10:
+                    
+                    # Bu ürün daha önce bildirilmediyse VE stoğu belli bir eşiğin altındaysa
+                    if urun.id not in self.bildirilen_urunler:
+                        
+                        self.bildirimler.append(f"📦 STOK GİRİŞİ: {urun.isim} (Mevcut Stok: {urun.stok})")
+                        yeni_bildirim_sayisi += 1
+                        self.bildirilen_urunler.add(urun.id) # Bildirildi olarak işaretle
+
+                # Eğer ürünün stoğu normale dönerse (örnek 10'un üstüne çıkarsa)
+                elif urun.stok > 10 and urun.id in self.bildirilen_urunler:
+                    # Normal seviyeye döndüğü için listeden çıkarılabilir
+                    self.bildirilen_urunler.discard(urun.id)
+            
+            if yeni_bildirim_sayisi > 0:
+                self.bildirim_sayaci += yeni_bildirim_sayisi
+                QMessageBox.information(self, "Yeni Bildirim", f"{yeni_bildirim_sayisi} yeni stok bildirimi var!")
+                
+                self.btn_bildirimler.setText(f"🔔 Bildirimler ({self.bildirim_sayaci})")
+                
+                if self.stacked_content.currentWidget() == self.bildirimler_page:
+                    self.load_bildirimler()
+
+        except Exception as e:
+            print(f"Bildirim kontrol hatası: {e}")
+            QMessageBox.critical(self, "Hata", f"Bildirim kontrol hatası: {e}")
+
+
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
         
@@ -24,14 +69,25 @@ class MusteriView(QWidget):
         menu_layout = QVBoxLayout(menu_widget)
         
         self.btn_dashboard = QPushButton("🏠 Dashboard")
-        self.btn_urunler = QPushButton("🛒 Ürünler ve Sipariş")
-        self.btn_siparislerim = QPushButton("📄 Siparişlerim")
-        self.btn_odeme = QPushButton("💳 Ödeme (Sepet)")
+        self.btn_dashboard.setObjectName("nav_btn") 
         
+        self.btn_urunler = QPushButton("🛒 Ürünler ve Sipariş")
+        self.btn_urunler.setObjectName("nav_btn") 
+        
+        self.btn_siparislerim = QPushButton("📄 Siparişlerim")
+        self.btn_siparislerim.setObjectName("nav_btn") 
+        
+        self.btn_odeme = QPushButton("💳 Ödeme (Sepet)")
+        self.btn_odeme.setObjectName("nav_btn") 
+        
+        self.btn_bildirimler = QPushButton("🔔 Bildirimler") # YENİ BUTON
+        self.btn_bildirimler.setObjectName("nav_btn") # YENİ BUTON
+
         menu_layout.addWidget(self.btn_dashboard)
         menu_layout.addWidget(self.btn_urunler)
         menu_layout.addWidget(self.btn_siparislerim)
         menu_layout.addWidget(self.btn_odeme)
+        menu_layout.addWidget(self.btn_bildirimler) 
         menu_layout.addStretch() 
 
         menu_widget.setFixedWidth(200)
@@ -42,47 +98,123 @@ class MusteriView(QWidget):
         main_layout.addWidget(self.stacked_content)
         
         # İçerik Sayfalarını Oluşturma
-        self.dashboard_page = self.create_dashboard_page()
+        self.dashboard_page = self.create_dashboard_page() 
         self.urunler_page = self.create_urunler_page()
         self.siparislerim_page = self.create_siparislerim_page()
         self.odeme_page = self.create_odeme_page()
+        self.bildirimler_page = self.create_bildirimler_page() 
         
         self.stacked_content.addWidget(self.dashboard_page)
         self.stacked_content.addWidget(self.urunler_page)
         self.stacked_content.addWidget(self.siparislerim_page)
         self.stacked_content.addWidget(self.odeme_page)
+        self.stacked_content.addWidget(self.bildirimler_page) 
         
         # Bağlantılar
         self.btn_dashboard.clicked.connect(lambda: self.stacked_content.setCurrentWidget(self.dashboard_page))
         self.btn_urunler.clicked.connect(lambda: self.show_urunler_page())
         self.btn_siparislerim.clicked.connect(lambda: self.show_siparislerim_page())
         self.btn_odeme.clicked.connect(lambda: self.show_odeme_page())
+        self.btn_bildirimler.clicked.connect(lambda: self.show_bildirimler_page()) 
         
-        # Başlangıçta Ürünler sayfasını göster
         self.show_urunler_page() 
         
-    # --- Sayfa Oluşturma Metotları ---
+    # --- YENİ BİLDİRİM SAYFASI METOTLARI ---
     
+    def create_bildirimler_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.addWidget(QLabel("<h2>🔔 Bildirim Merkezi</h2>"))
+        
+        self.bildirim_listesi = QTableWidget()
+        self.bildirim_listesi.setColumnCount(1)
+        self.bildirim_listesi.setHorizontalHeaderLabels(["Bildirim"])
+        self.bildirim_listesi.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        layout.addWidget(self.bildirim_listesi)
+        
+        self.btn_bildirim_temizle = QPushButton("Bildirimleri Temizle")
+        self.btn_bildirim_temizle.clicked.connect(self.clear_bildirimler)
+        layout.addWidget(self.btn_bildirim_temizle)
+        
+        return page
+        
+    def show_bildirimler_page(self):
+        self.stacked_content.setCurrentWidget(self.bildirimler_page)
+        self.load_bildirimler()
+        
+    def load_bildirimler(self):
+        # Bildirim listesini tabloya yükle
+        self.bildirim_listesi.setRowCount(len(self.bildirimler))
+        
+        for i, mesaj in enumerate(reversed(self.bildirimler)): # En yeniyi en üste getir
+            self.bildirim_listesi.setItem(i, 0, QTableWidgetItem(mesaj))
+
+        # Sayaç sıfırlama (Kullanıcı sayfayı görüntülediği için)
+        if self.bildirim_sayaci > 0:
+            self.bildirim_sayaci = 0
+            self.btn_bildirimler.setText("🔔 Bildirimler")
+
+    def clear_bildirimler(self):
+        self.bildirimler = []
+        self.bildirim_sayaci = 0
+        self.load_bildirimler()
+        self.btn_bildirimler.setText("🔔 Bildirimler")
+    
+    # --- DASHBOARD METODU ---
     def create_dashboard_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(QLabel(f"<h2>Hoş Geldiniz, Sn. {self.current_user.kullanici_adi.capitalize()} (Müşteri)</h2>"))
-        layout.addWidget(QLabel("Burada kişisel indirimleriniz, favori ürünleriniz gibi bilgiler gösterilecek."))
+        layout.addWidget(QLabel(f"<h2>Hoş Geldiniz, Sn. {self.current_user.kullanici_adi.capitalize()}</h2>"))
+        layout.addWidget(QLabel("<hr>"))
+        
+        try:
+            # Müşterinin son sipariş durumunu ve toplam sipariş sayısını çekme
+            toplam_siparis_sayisi = self.session.query(Siparis).filter(
+                Siparis.kullanici_id == self.current_user.id
+            ).count()
+            
+            son_siparis = self.session.query(Siparis).filter(
+                Siparis.kullanici_id == self.current_user.id
+            ).order_by(Siparis.tarih.desc()).first()
+            
+            son_durum = son_siparis.durum if son_siparis else "Henüz Sipariş Yok"
+            
+            html_content = f"""
+            <div style="display: flex; justify-content: space-around; padding: 20px;">
+                <div style="border: 1px solid #ddd; padding: 15px; width: 45%; background-color: #f0f8ff;">
+                    <h4>📋 Toplam Sipariş Sayısı</h4>
+                    <p style="font-size: 24px; color: blue;"><b>{toplam_siparis_sayisi}</b> Adet</p>
+                </div>
+                <div style="border: 1px solid #ddd; padding: 15px; width: 45%; background-color: #fff0f0;">
+                    <h4>⏳ Son Sipariş Durumu</h4>
+                    <p style="font-size: 24px; color: {'green' if son_durum == 'Tamamlandı' else 'red'};"><b>{son_durum}</b></p>
+                </div>
+            </div>
+            """
+            
+            layout.addWidget(QLabel(html_content))
+            layout.addWidget(QLabel("<i>Ana menüden ürünleri görüntüleyebilir veya sipariş geçmişinizi kontrol edebilirsiniz.</i>"))
+
+        except Exception as e:
+            # Hata oluştuğunda sadece hatayı göster, uygulamanın çökmesini engelle
+            layout.addWidget(QLabel(f"Dashboard verileri yüklenemedi: {e}"))
+            
+        layout.addStretch()
         return page
+
+    # --- Ürünler Sayfası ---
 
     def create_urunler_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addWidget(QLabel("<h3>🛒 Tüm Ürünler ve Sipariş</h3>"))
         
-        # Ürün Tablosu
         self.urun_table = QTableWidget()
         self.urun_table.setColumnCount(5)
         self.urun_table.setHorizontalHeaderLabels(["ID", "Barkod", "Ürün Adı", "Fiyat", "İşlem"])
         self.urun_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.urun_table)
         
-        # Sepete Ekleme Alanı (Basit Örnek)
         sepete_ekle_layout = QHBoxLayout()
         self.sepete_ekle_barkod = QLineEdit(placeholderText="Barkod Girin")
         self.sepete_ekle_adet = QLineEdit(placeholderText="Adet (Varsayılan 1)")
@@ -113,7 +245,6 @@ class MusteriView(QWidget):
             self.urun_table.setItem(i, 2, QTableWidgetItem(urun.isim))
             self.urun_table.setItem(i, 3, QTableWidgetItem(f"{urun.fiyat:.2f} ₺"))
             
-            # Sepete Ekle Butonu
             add_btn = QPushButton("Sepete Ekle")
             add_btn.clicked.connect(lambda checked, b=urun.barkod: self.add_to_sepet(b))
             self.urun_table.setCellWidget(i, 4, add_btn)
@@ -219,12 +350,9 @@ class MusteriView(QWidget):
         else:
              self.siparis_detay_label.setText("Sipariş detayları yüklenemedi.")
 
-    # --- Ödeme Sayfası ve Sipariş Tamamlama ---
-    
-    # YENİ METOT: Sepette adet değiştirme (POS ekranındaki mantığın aynısı)
+
     def change_sepet_item_quantity(self, row, delta):
-        # Sepet tablosu, sepet özeti sayfasındaki tabloya referans verir
-        barkod = self.odeme_sepet_table.item(row, 0).text() # Tablodan barkodu almalıyız
+        barkod = self.odeme_sepet_table.item(row, 0).text()
         
         if barkod in self.siparis_sepetic:
             current_adet = self.siparis_sepetic[barkod]['adet']
@@ -239,14 +367,13 @@ class MusteriView(QWidget):
             else:
                 self.siparis_sepetic[barkod]['adet'] = new_adet
                 
-            self.load_sepet_ozet() # Sepeti yenile
+            self.load_sepet_ozet() 
 
-    # Sepetten çıkarma butonu artık ayrı bir metotta işleniyor.
     def remove_from_sepet(self, barkod):
         if barkod in self.siparis_sepetic:
             del self.siparis_sepetic[barkod]
             QMessageBox.information(self, "Sepet", "Ürün sepetten çıkarıldı.")
-            self.load_sepet_ozet() # Sepeti yenile
+            self.load_sepet_ozet() 
 
 
     def create_odeme_page(self):
@@ -254,7 +381,6 @@ class MusteriView(QWidget):
         layout = QVBoxLayout(page)
         
         self.odeme_sepet_table = QTableWidget()
-        # Sütun sayısını 6 yapıyoruz: Ürün, Fiyat, Adet, Ara Toplam, İşlem, Adet Kontrol
         self.odeme_sepet_table.setColumnCount(6) 
         self.odeme_sepet_table.setHorizontalHeaderLabels(["Barkod", "Ürün Adı", "Fiyat", "Adet", "Ara Toplam", "İşlem"])
         self.odeme_sepet_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -277,24 +403,22 @@ class MusteriView(QWidget):
 
     def load_sepet_ozet(self):
         self.odeme_sepet_table.setRowCount(len(self.siparis_sepetic))
-        self.odeme_sepet_table.setColumnCount(6) # Kontrol
+        self.odeme_sepet_table.setColumnCount(6) 
         toplam_tutar = 0.0
-        
-        # Müşteri sepetindeki ürünleri listelerken adet değiştirme butonlarını ekliyoruz
         for i, (barkod, item) in enumerate(self.siparis_sepetic.items()):
             urun = item['urun']
             adet = item['adet']
             ara_toplam = urun.fiyat * adet
             toplam_tutar += ara_toplam
             
-            # Tabloya değerleri atama
-            self.odeme_sepet_table.setItem(i, 0, QTableWidgetItem(barkod)) # Barkod eklendi
+            
+            self.odeme_sepet_table.setItem(i, 0, QTableWidgetItem(barkod)) 
             self.odeme_sepet_table.setItem(i, 1, QTableWidgetItem(urun.isim))
             self.odeme_sepet_table.setItem(i, 2, QTableWidgetItem(f"{urun.fiyat:.2f} ₺"))
             self.odeme_sepet_table.setItem(i, 3, QTableWidgetItem(str(adet)))
             self.odeme_sepet_table.setItem(i, 4, QTableWidgetItem(f"{ara_toplam:.2f} ₺"))
             
-            # Adet Kontrol ve Çıkar Butonları
+            
             islem_widget = QBtnWidget()
             islem_layout = QBtnLayout(islem_widget)
             islem_layout.setContentsMargins(0,0,0,0)
@@ -307,16 +431,16 @@ class MusteriView(QWidget):
             btn_plus.setFixedWidth(25)
             btn_plus.clicked.connect(lambda checked, row=i, delta=1: self.change_sepet_item_quantity(row, delta))
             
-            remove_btn = QPushButton("X") # Çıkar butonu
+            remove_btn = QPushButton("X")
             remove_btn.setFixedWidth(25)
             remove_btn.clicked.connect(lambda checked, b=barkod: self.remove_from_sepet(b))
 
             islem_layout.addWidget(btn_minus)
-            islem_layout.addWidget(QLabel(str(adet))) # Adedi görsel olarak gösterme
+            islem_layout.addWidget(QLabel(str(adet))) 
             islem_layout.addWidget(btn_plus)
             islem_layout.addWidget(remove_btn)
             
-            self.odeme_sepet_table.setCellWidget(i, 5, islem_widget) # 5. sütuna (6. sütun) yerleştirme
+            self.odeme_sepet_table.setCellWidget(i, 5, islem_widget) 
             
         self.toplam_label.setText(f"Toplam Tutar: {toplam_tutar:.2f} ₺")
 
@@ -328,7 +452,7 @@ class MusteriView(QWidget):
         toplam_tutar = 0.0
         siparis_detaylari = []
         
-        # 1. Ön Kontrol ve Hesaplama
+        
         for barkod, item in self.siparis_sepetic.items():
             urun = item['urun']
             adet = item['adet']
@@ -340,19 +464,19 @@ class MusteriView(QWidget):
                 'birim_fiyat': urun.fiyat 
             })
 
-        # 2. Sipariş İşlemini Başlat ve Kaydet
+        
         try:
-            # A) Sipariş Kaydını Oluştur
+
             yeni_siparis = Siparis(
                 kullanici_id=self.current_user.id, 
                 durum="Bekleniyor",
-                toplam_tutar=toplam_tutar, # TUTARIN DOĞRU ATANMASI KRİTİK
+                toplam_tutar=toplam_tutar,
                 tarih=datetime.now()
             )
             self.session.add(yeni_siparis)
             self.session.flush() 
 
-            # B) Sipariş Detaylarını ve Stok Güncellemeyi Yap
+            
             for detay in siparis_detaylari:
                 siparis_detay = SiparisDetay(
                     siparis_id=yeni_siparis.id,
@@ -361,6 +485,7 @@ class MusteriView(QWidget):
                     birim_fiyat=detay['birim_fiyat']
                 )
                 self.session.add(siparis_detay)
+                
                 
                 db_urun = self.session.query(Urun).filter_by(id=detay['urun_id']).with_for_update().first()
                 if db_urun:
@@ -376,6 +501,7 @@ class MusteriView(QWidget):
         except Exception as e:
             self.session.rollback()
             QMessageBox.critical(self, "Hata", f"Sipariş oluşturulurken hata: {e}")
+            
     def create_dashboard_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -384,7 +510,7 @@ class MusteriView(QWidget):
         
         try:
             # Müşterinin son sipariş durumunu ve toplam sipariş sayısını çekme
-            toplam_siparis = self.session.query(Siparis).filter(
+            toplam_siparis_sayisi = self.session.query(Siparis).filter( # DÜZELTİLDİ: toplam_siparis_sayisi kullanıldı
                 Siparis.kullanici_id == self.current_user.id
             ).count()
             
@@ -398,7 +524,7 @@ class MusteriView(QWidget):
             <div style="display: flex; justify-content: space-around; padding: 20px;">
                 <div style="border: 1px solid #ddd; padding: 15px; width: 45%; background-color: #f0f8ff;">
                     <h4>📋 Toplam Sipariş Sayısı</h4>
-                    <p style="font-size: 24px; color: blue;"><b>{toplam_siparis}</b> Adet</p>
+                    <p style="font-size: 24px; color: blue;"><b>{toplam_siparis_sayisi}</b> Adet</p>
                 </div>
                 <div style="border: 1px solid #ddd; padding: 15px; width: 45%; background-color: #fff0f0;">
                     <h4>⏳ Son Sipariş Durumu</h4>

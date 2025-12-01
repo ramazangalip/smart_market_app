@@ -1,5 +1,3 @@
-# auth_screen.py
-
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QLabel, QComboBox, QMessageBox,QWidget
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -17,6 +15,9 @@ class LoginRegisterDialog(QDialog):
 
         self.stack_layout = QVBoxLayout(self) # Ana düzen
 
+        # Stil uygulaması için ana widget'a padding ekleyelim
+        self.setStyleSheet("padding: 10px;")
+
         self.login_widget = self.create_login_widget()
         self.register_widget = self.create_register_widget()
         
@@ -29,10 +30,17 @@ class LoginRegisterDialog(QDialog):
         form_layout = QFormLayout()
 
         self.login_user = QLineEdit()
+        self.login_user.setPlaceholderText("Kullanıcı Adınız") # Placeholder eklendi
         self.login_pass = QLineEdit(echoMode=QLineEdit.Password)
+        self.login_pass.setPlaceholderText("Şifreniz") # Placeholder eklendi
+        
+        # Stilin uygulanması için bir özel Nesne Adı gerekmez, genel QPushButton stili uygulanacaktır.
         self.login_btn = QPushButton("Giriş Yap")
+        self.login_btn.setStyleSheet("padding: 10px; font-weight: bold;") # Vurgu için padding eklendi
+        
         self.switch_to_register_btn = QPushButton("Hesabın yok mu? Kayıt Ol")
-
+        self.switch_to_register_btn.setStyleSheet("background-color: #6c757d; border: 1px solid #6c757d; color: white;") # İkincil stil
+        
         form_layout.addRow("Kullanıcı Adı:", self.login_user)
         form_layout.addRow("Şifre:", self.login_pass)
         
@@ -50,11 +58,17 @@ class LoginRegisterDialog(QDialog):
         form_layout = QFormLayout()
 
         self.register_user = QLineEdit()
+        self.register_user.setPlaceholderText("Kullanıcı Adı Seçin")
         self.register_pass = QLineEdit(echoMode=QLineEdit.Password)
+        self.register_pass.setPlaceholderText("Şifre Belirleyin")
         self.register_role = QComboBox()
         self.register_role.addItems(['musteri', 'calisan', 'yonetici']) # Rolleri ekle
+        
         self.register_btn = QPushButton("Kayıt Ol")
+        self.register_btn.setStyleSheet("background-color: #4CAF50; border: 1px solid #4CAF50; color: white; padding: 10px; font-weight: bold;") # Başarı rengi
+        
         self.switch_to_login_btn = QPushButton("Zaten hesabım var? Giriş Yap")
+        self.switch_to_login_btn.setStyleSheet("background-color: #6c757d; border: 1px solid #6c757d; color: white;") # İkincil stil
         
         form_layout.addRow("Kullanıcı Adı:", self.register_user)
         form_layout.addRow("Şifre:", self.register_pass)
@@ -107,7 +121,7 @@ class LoginRegisterDialog(QDialog):
             yeni_kullanici.set_sifre(sifre)
             self.session.add(yeni_kullanici)
 
-           
+            
             if rol in ['calisan', 'yonetici']:
                 self.session.flush() 
                 calisan_bilgi = CalisanBilgisi(kullanici_id=yeni_kullanici.id, pozisyon=rol)

@@ -1,25 +1,31 @@
-# views/yonetici_view.py (SON VERSİYON: Dashboard, Çalışan Yönetimi ve Detaylı Raporlama)
-
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QTableWidget, 
     QTableWidgetItem, QLabel, QStackedWidget, QHeaderView, QMessageBox, 
     QLineEdit, QDialog, QFormLayout, QHBoxLayout as QBtnLayout
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QByteArray, QBuffer, QIODevice
+from PyQt5.QtGui import QPixmap 
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func 
+from sqlalchemy import func, extract 
 from db_model import *
 from dialogs.urun_ekle_dialog import UrunEkleDuzenleDialog
 
-# ReportLab ve OS kütüphanelerini import ediyoruz (PDF Raporu için)
+# ReportLab ve OS kütüphanelerini import ediyoruz
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 import os
-from datetime import datetime, timedelta # datetime ve timedelta eklendi
+from datetime import datetime, timedelta, date 
+
+# Matplotlib için gerekli importlar
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import io
+
 
 # --- Yardımcı Düzenleme Penceresi: Çalışan Bilgilerini Güncelleme ---
+# ... (CalisanDuzenleDialog sınıfı aynı kalır) ...
 class CalisanDuzenleDialog(QDialog):
     def __init__(self, calisan, session, parent=None):
         super().__init__(parent)
@@ -57,7 +63,6 @@ class CalisanDuzenleDialog(QDialog):
         except Exception as e:
             self.session.rollback()
             QMessageBox.critical(self, "Hata", f"Veritabanı hatası: {e}")
-
 # --- Ana Yönetici Görünümü ---
 class YoneticiView(QWidget):
     def __init__(self, session, current_user, parent=None):
@@ -74,10 +79,19 @@ class YoneticiView(QWidget):
         menu_layout = QVBoxLayout(menu_widget) 
         
         self.btn_dashboard = QPushButton("🏠 Dashboard")
+        self.btn_dashboard.setObjectName("nav_btn") 
+        
         self.btn_raporlama = QPushButton("📊 Raporlama")
+        self.btn_raporlama.setObjectName("nav_btn") 
+        
         self.btn_siparisler = QPushButton("📦 Tüm Siparişler")
+        self.btn_siparisler.setObjectName("nav_btn") 
+        
         self.btn_calisan_yonetim = QPushButton("👥 Çalışan Yönetimi")
+        self.btn_calisan_yonetim.setObjectName("nav_btn") 
+        
         self.btn_urun_yonetim = QPushButton("📦 Ürün Yönetimi") 
+        self.btn_urun_yonetim.setObjectName("nav_btn") 
         
         menu_layout.addWidget(self.btn_dashboard)
         menu_layout.addWidget(self.btn_raporlama)
@@ -94,7 +108,7 @@ class YoneticiView(QWidget):
         main_layout.addWidget(self.stacked_content)
         
         # İçerik Sayfalarını Oluşturma
-        self.dashboard_page = self.create_dashboard_page() # DÜZELTİLDİ: Metot çağrılıyor
+        self.dashboard_page = self.create_dashboard_page() 
         self.raporlama_page = self.create_raporlama_page()
         self.siparisler_page = self.create_siparisler_page()
         self.calisan_yonetim_page = self.create_calisan_yonetim_page()
@@ -115,32 +129,25 @@ class YoneticiView(QWidget):
         
         self.stacked_content.setCurrentWidget(self.dashboard_page)
 
-    # --- YENİ EKLENEN DASHBOARD METODU ---
+    # --- DASHBOARD METODU (GÜNCELLENDİ) ---
     def create_dashboard_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.addWidget(QLabel(f"<h2>Hoş Geldiniz, Yönetici {self.current_user.kullanici_adi.capitalize()}</h2>"))
         layout.addWidget(QLabel("<hr>"))
 
-        # SQLAlchemy'den özet verileri çekme
+        # 1. Özet Kartlar
         try:
-            
-            # 1. Genel Stok ve Kritik Ürün Sayısı
             toplam_urun_sayisi = self.session.query(Urun).count()
             kritik_stok_sayisi = self.session.query(Urun).filter(Urun.stok < 5).count()
-            
-            # 2. Genel Ciro (Son 30 Gün)
             otuz_gun_oncesi = datetime.now() - timedelta(days=30)
             son_30_gun_ciro = self.session.query(func.sum(Satis.toplam_tutar)).filter(
                 Satis.tarih >= otuz_gun_oncesi
             ).scalar() or 0.0
-
-            # 3. Bekleyen Sipariş Sayısı
             bekleyen_siparis_sayisi = self.session.query(Siparis).filter(
                 Siparis.durum == 'Bekleniyor'
             ).count()
 
-            # Kart Görünümü için HTML
             html_content = f"""
             <div style="display: flex; justify-content: space-around; padding: 20px;">
                 <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #f9f9f9;">
@@ -161,11 +168,87 @@ class YoneticiView(QWidget):
             
             layout.addWidget(QLabel(html_content))
             
+            # 2. Grafik Alanı (YENİ EKLENTİ)
+            layout.addWidget(QLabel("<h3>Son 30 Günlük Satış Trendi</h3>"))
+            self.sales_chart_label = QLabel("Grafik Yükleniyor...")
+            self.sales_chart_label.setAlignment(Qt.AlignCenter)
+            self.sales_chart_label.setMinimumSize(500, 300)
+            layout.addWidget(self.sales_chart_label)
+            
+            # Grafiği yükle
+            self.load_sales_chart()
+
         except Exception as e:
             layout.addWidget(QLabel(f"Dashboard verileri yüklenemedi: {e}"))
             
         layout.addStretch()
         return page
+
+    # YENİ METOT: Satış trendi grafiğini oluşturur ve QLabel'a yükler
+    def load_sales_chart(self):
+        try:
+            otuz_gun_oncesi = datetime.now() - timedelta(days=30)
+            
+            sales_data = self.session.query(
+                func.date(Satis.tarih).label('date'),
+                func.sum(Satis.toplam_tutar).label('total_sales')
+            ).filter(
+                Satis.tarih >= otuz_gun_oncesi
+            ).group_by(func.date(Satis.tarih)).order_by(func.date(Satis.tarih)).all()
+
+            if not sales_data:
+                self.sales_chart_label.setText("Son 30 günde satış verisi bulunmamaktadır.")
+                return
+
+            # Hata Çözümü: Veritabanından gelen string tarihleri datetime.date objesine dönüştür.
+            dates = []
+            sales = []
+            
+            for d in sales_data:
+                # SQLAlchemy/SQLite bazen tarihi string olarak döndürür
+                if isinstance(d.date, str):
+                    try:
+                        # String'i datetime objesine çevir
+                        dt_obj = datetime.strptime(d.date, '%Y-%m-%d').date()
+                    except ValueError:
+                        # Eğer format farklıysa veya dönüşüm başarısız olursa atla
+                        continue 
+                else:
+                    dt_obj = d.date
+                
+                dates.append(dt_obj)
+                sales.append(d.total_sales)
+
+            # Matplotlib ile grafiği çizme
+            fig, ax = plt.subplots(figsize=(6, 3))
+            
+            # Çubuk grafik kullanımı
+            ax.bar(dates, sales, color='#007ACC')
+            
+            ax.set_title('Günlük Ciro (Son 30 Gün)')
+            ax.set_ylabel('Ciro (₺)')
+            
+            # Eksen etiketlerini ayarlama (Sadece dates objelerini kullanıyoruz)
+            if dates:
+                # Sadece her 5 günde bir etiket göster
+                ax.set_xticks(dates[::5]) 
+                ax.set_xticklabels([d.strftime('%m-%d') for d in dates[::5]], rotation=45, ha='right')
+            
+            plt.tight_layout()
+
+            # Grafiği QPixmap'e dönüştürme
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png')
+            plt.close(fig) 
+            
+            pixmap = QPixmap()
+            pixmap.loadFromData(buf.getvalue(), 'png')
+            self.sales_chart_label.setPixmap(pixmap)
+            self.sales_chart_label.setText("") 
+
+        except Exception as e:
+            self.sales_chart_label.setText(f"Grafik yüklenirken hata oluştu: {e}")
+            print(f"Grafik Hatası: {e}") 
 
     # --- Çalışan Yönetimi Metotları ---
     
@@ -209,7 +292,7 @@ class YoneticiView(QWidget):
             
             edit_btn = QPushButton("Düzenle")
             edit_btn.clicked.connect(lambda checked, c=calisan_bilgi: self.open_calisan_duzenle(c))
-            self.calisan_table.setCellWidget(i, 4, edit_btn)
+            self.calisan_table.setCellWidget(i, 4, edit_btn) # HATA DÜZELTİLDİ
 
     def open_calisan_duzenle(self, calisan_bilgi):
         dialog = CalisanDuzenleDialog(calisan_bilgi, self.session, self)
@@ -305,13 +388,11 @@ class YoneticiView(QWidget):
             self.stok_raporu_table.setItem(i, 2, QTableWidgetItem(str(urun.stok)))
 
     def load_satis_raporu(self):
-        # Genel Satış Toplamı (Düzeltildi: one_or_none() kullanılıyor)
         genel_satis_sonuc = self.session.query( 
             func.count(Satis.id), 
             func.sum(Satis.toplam_tutar)
         ).one_or_none() 
 
-        # Toplam adet çekiliyor
         toplam_adet = self.session.query(func.sum(SatisDetay.adet)).scalar() or 0
         
         if genel_satis_sonuc and genel_satis_sonuc[0] > 0:
@@ -340,7 +421,7 @@ class YoneticiView(QWidget):
             self.personel_satis_table.setItem(i, 2, QTableWidgetItem(f"{tutar:.2f} ₺"))
 
     def generate_yonetici_pdf(self):
-        # 1. Verileri Hazırla (Mevcut load metotlarını çağırarak)
+        
         kritik_stok_urunler = self.session.query(Urun).filter(Urun.stok < 5).order_by(Urun.stok.asc()).all()
         
         personel_satis_sonuclari = self.session.query(
@@ -352,7 +433,7 @@ class YoneticiView(QWidget):
         genel_satis_sonuc = self.session.query(func.sum(SatisDetay.adet)).scalar() or 0
         genel_ciro = self.session.query(func.sum(Satis.toplam_tutar)).scalar() or 0.0
         
-        # 2. PDF Oluşturma
+        
         tarih_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"Yonetici_Raporu_{tarih_str}.pdf"
         
@@ -360,18 +441,18 @@ class YoneticiView(QWidget):
         styles = getSampleStyleSheet()
         story = []
 
-        # --- Başlık ---
+        
         story.append(Paragraph("<b>AKILLI MARKET YÖNETİCİ RAPORU</b>", styles['Title']))
         story.append(Paragraph(f"Tarih: {datetime.now().strftime('%d-%m-%Y %H:%M')}", styles['Normal']))
         story.append(Spacer(1, 24))
 
-        # --- Genel Satış Özeti ---
+        
         story.append(Paragraph("<b>1. Genel Satış Özeti</b>", styles['h2']))
         story.append(Paragraph(f"Toplam Satılan Ürün Adedi: <b>{genel_satis_sonuc}</b>", styles['BodyText']))
         story.append(Paragraph(f"Toplam Elde Edilen Ciro: <b>{genel_ciro:.2f} ₺</b>", styles['BodyText']))
         story.append(Spacer(1, 18))
 
-        # --- Kritik Stok Raporu ---
+        
         story.append(Paragraph("<b>2. Kritik Stok Raporu (< 5 Adet)</b>", styles['h2']))
         if kritik_stok_urunler:
             stok_data = [["Ürün Adı", "Barkod", "Stok"]]
@@ -389,7 +470,7 @@ class YoneticiView(QWidget):
             story.append(Paragraph("<i>Kritik stok seviyesinde ürün bulunmamaktadır.</i>", styles['Italic']))
         story.append(Spacer(1, 18))
 
-        # --- Çalışan Bazlı Satış Raporu ---
+        
         story.append(Paragraph("<b>3. Çalışan Bazlı Performans</b>", styles['h2']))
         if personel_satis_sonuclari:
             personel_data = [["Çalışan Adı", "Satış Sayısı", "Toplam Ciro (₺)"]]
@@ -407,14 +488,13 @@ class YoneticiView(QWidget):
         else:
             story.append(Paragraph("<i>Henüz çalışan satışı kaydedilmemiştir.</i>", styles['Italic']))
 
-        # 3. PDF'i Oluştur ve Bilgilendir
+        
         doc.build(story)
         
         QMessageBox.information(self, "PDF Oluşturuldu", 
                                 f"Yönetici Raporu başarıyla oluşturuldu: <b>{filename}</b>\nDosya konumu: {os.getcwd()}")
 
 
-    # --- Ürün Yönetimi Metotları (Daha önceki adımlardan gelen kod) ---
     
     def create_urun_yonetim_page(self):
         page = QWidget()
