@@ -6,10 +6,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from db_model import Urun, Siparis, Kullanici, Session ,Satis,SatisDetay
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func # SQLAlchemy fonksiyonları için import
-from datetime import datetime, date, timedelta # date ve timedelta Dashboard için eklendi
+from sqlalchemy import func 
+from datetime import datetime, date, timedelta 
 
-# ReportLab ve OS kütüphanelerini import ediyoruz
+#
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
@@ -33,16 +33,16 @@ class CalisanView(QWidget):
         menu_layout = QVBoxLayout(menu_widget)
         
         self.btn_dashboard = QPushButton("🏠 Dashboard")
-        self.btn_dashboard.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        self.btn_dashboard.setObjectName("nav_btn") 
         
         self.btn_satis_ekrani = QPushButton("💵 Satış Ekranı")
-        self.btn_satis_ekrani.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        self.btn_satis_ekrani.setObjectName("nav_btn") 
         
         self.btn_siparisler = QPushButton("📦 Gelen Siparişler")
-        self.btn_siparisler.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        self.btn_siparisler.setObjectName("nav_btn") 
         
         self.btn_fatura = QPushButton("🧾 Fatura Oluştur")
-        self.btn_fatura.setObjectName("nav_btn") # STİL İÇİN EKLENDİ
+        self.btn_fatura.setObjectName("nav_btn") 
         
         menu_layout.addWidget(self.btn_dashboard)
         menu_layout.addWidget(self.btn_satis_ekrani)
@@ -53,31 +53,30 @@ class CalisanView(QWidget):
         menu_widget.setFixedWidth(200)
         main_layout.addWidget(menu_widget)
         
-        # --- Sağ İçerik Alanı (Stacked Widget) ---
+       
         self.stacked_content = QStackedWidget()
         main_layout.addWidget(self.stacked_content)
         
-        # İçerik Sayfalarını Oluşturma
-        self.dashboard_page = self.create_dashboard_page() # Dashboard metodu çağrıldı
+        self.dashboard_page = self.create_dashboard_page() 
         self.satis_ekrani_page = self.create_satis_ekrani_page()
         self.siparisler_page = self.create_siparisler_page()
         self.fatura_page = self.create_fatura_page() 
         
-        # Sayfaları Stacked Widget'a Ekleme
+     
         self.stacked_content.addWidget(self.dashboard_page) 
         self.stacked_content.addWidget(self.satis_ekrani_page)
         self.stacked_content.addWidget(self.siparisler_page)
         self.stacked_content.addWidget(self.fatura_page) 
         
-        # Bağlantılar
+        
         self.btn_dashboard.clicked.connect(lambda: self.stacked_content.setCurrentWidget(self.dashboard_page))
         self.btn_satis_ekrani.clicked.connect(lambda: self.show_satis_ekrani())
         self.btn_siparisler.clicked.connect(lambda: self.show_siparisler_page())
         self.btn_fatura.clicked.connect(lambda: self.show_fatura_page()) 
         
-        self.stacked_content.setCurrentWidget(self.dashboard_page) # Başlangıç: Dashboard
+        self.stacked_content.setCurrentWidget(self.dashboard_page) 
     
-    # --- DASHBOARD METODU ---
+    
     def create_dashboard_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -106,15 +105,15 @@ class CalisanView(QWidget):
             html_content = f"""
             <div style="display: flex; justify-content: space-around; padding: 20px;">
                 <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #e6f7ff;">
-                    <h4>📅 Bugünki Satış Sayısı</h4>
+                    <h4>📅 Bugunki Satis Sayisi</h4>
                     <p style="font-size: 24px; color: blue;"><b>{gunluk_satis_sayisi}</b> Adet</p>
                 </div>
                 <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #e6ffe6;">
-                    <h4>💰 Bugünki Ciro</h4>
+                    <h4>💰 Bugunki Ciro</h4>
                     <p style="font-size: 24px; color: green;"><b>{gunluk_ciro:.2f}</b> ₺</p>
                 </div>
                 <div style="border: 1px solid #ddd; padding: 15px; width: 30%; background-color: #fff0e6;">
-                    <h4>📦 Yeni Siparişler</h4>
+                    <h4>📦 Yeni Siparisler</h4>
                     <p style="font-size: 24px; color: #ff8c00;"><b>{bekleyen_siparis_sayisi}</b> Bekleyen</p>
                 </div>
             </div>
@@ -123,7 +122,7 @@ class CalisanView(QWidget):
             layout.addWidget(QLabel(html_content))
             
         except Exception as e:
-            layout.addWidget(QLabel(f"Dashboard verileri yüklenemedi: {e}"))
+            layout.addWidget(QLabel(f"Dashboard verileri yuklenemedi: {e}"))
             
         layout.addStretch()
         return page
@@ -133,7 +132,7 @@ class CalisanView(QWidget):
     def create_satis_ekrani_page(self):
         page = QWidget()
         main_layout = QVBoxLayout(page)
-        main_layout.addWidget(QLabel("<h2>💵 Hızlı Satış Ekranı</h2>"))
+        main_layout.addWidget(QLabel("<h2>💵 Hızlı Satis Ekranı</h2>"))
         
         content_layout = QHBoxLayout()
 
@@ -147,18 +146,18 @@ class CalisanView(QWidget):
         sepet_layout.addWidget(self.sepet_table)
         content_layout.addWidget(sepet_group, 3) 
 
-        # 2. İşlem Alanı
+    
         islem_group = QGroupBox("İşlemler")
         islem_layout = QVBoxLayout(islem_group)
 
-        # Barkod Girişi
+       
         barkod_layout = QBtnLayout()
         self.barkod_input = QLineEdit(placeholderText="Barkod Tarayın veya Girin")
         self.barkod_input.returnPressed.connect(self.add_to_satis_sepeti) 
         barkod_layout.addWidget(self.barkod_input)
         islem_layout.addLayout(barkod_layout)
 
-        # Toplam Tutar ve Ödeme
+     
         islem_layout.addStretch()
         self.toplam_tutar_label = QLabel("<h2>Toplam: 0.00 ₺</h2>")
         islem_layout.addWidget(self.toplam_tutar_label)
@@ -330,7 +329,6 @@ class CalisanView(QWidget):
         self.satis_sepetic = {}
         self.update_sepet_table()
 
-    # --- Sipariş Yönetimi Metotları ---
 
     def create_siparisler_page(self):
         page = QWidget()
@@ -387,7 +385,7 @@ class CalisanView(QWidget):
             self.session.rollback()
             QMessageBox.critical(self, "Hata", f"Sipariş güncellenirken bir hata oluştu: {e}")
 
-    # --- Fatura Oluşturma Metotları ---
+
 
     def create_fatura_page(self):
         page = QWidget()
@@ -395,13 +393,13 @@ class CalisanView(QWidget):
         layout.addWidget(QLabel("<h2>🧾 Fatura Oluştur</h2>"))
         
         # Son Satışı Gösterme Alanı
-        self.fatura_bilgi_label = QLabel("<h3>Fatura Özeti</h3>")
+        self.fatura_bilgi_label = QLabel("<h3>Fatura Ozeti</h3>")
         self.fatura_bilgi_label.setStyleSheet("border: 1px solid #ccc; padding: 10px;")
         layout.addWidget(self.fatura_bilgi_label)
         
         self.fatura_detay_table = QTableWidget()
         self.fatura_detay_table.setColumnCount(4)
-        self.fatura_detay_table.setHorizontalHeaderLabels(["Ürün", "Adet", "Birim Fiyat", "Tutar"])
+        self.fatura_detay_table.setHorizontalHeaderLabels(["Urun", "Adet", "Birim Fiyat", "Tutar"])
         self.fatura_detay_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         layout.addWidget(self.fatura_detay_table)
         
@@ -436,7 +434,7 @@ class CalisanView(QWidget):
         self.satis_to_print = son_satis 
         
         self.fatura_bilgi_label.setText(
-            f"<h3>Fatura Özeti (Son Satış ID: {son_satis.id})</h3>"
+            f"<h3>Fatura Ozeti (Son Satis ID: {son_satis.id})</h3>"
             f"Tarih: {son_satis.tarih.strftime('%Y-%m-%d %H:%M')}<br>"
             f"Toplam Tutar: <b>{son_satis.toplam_tutar:.2f} ₺</b>"
         )
@@ -445,7 +443,7 @@ class CalisanView(QWidget):
         self.fatura_detay_table.setRowCount(len(detaylar))
         
         for i, detay in enumerate(detaylar):
-            urun_adi = detay.urun.isim if detay.urun else "Bilinmeyen Ürün"
+            urun_adi = detay.urun.isim if detay.urun else "Bilinmeyen Urun"
             ara_tutar = detay.adet * detay.birim_fiyat
             
             self.fatura_detay_table.setItem(i, 0, QTableWidgetItem(urun_adi))
@@ -469,20 +467,20 @@ class CalisanView(QWidget):
         styles = getSampleStyleSheet()
         story = []
 
-        story.append(Paragraph("<b>AKILLI MARKET SATIŞ FATURASI</b>", styles['Title']))
+        story.append(Paragraph("<b>AKILLI MARKET SATİS FATURASİ</b>", styles['Title']))
         story.append(Spacer(1, 12))
 
         fatura_info = [
             ['Fatura ID:', str(satis_obj.id)],
             ['Tarih:', satis_obj.tarih.strftime('%Y-%m-%d %H:%M')],
-            ['Çalışan:', self.current_user.kullanici_adi]
+            ['Çalisan:', self.current_user.kullanici_adi]
         ]
         t = Table(fatura_info, colWidths=[100, 200])
         t.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
         story.append(t)
         story.append(Spacer(1, 18))
 
-        data = [["Ürün Adı", "Adet", "Birim Fiyat (₺)", "Tutar (₺)"]]
+        data = [["Urun Adı", "Adet", "Birim Fiyat (₺)", "Tutar (₺)"]]
         
         toplam_tutar = 0
         
@@ -513,7 +511,7 @@ class CalisanView(QWidget):
         story.append(t)
         story.append(Spacer(1, 18))
         
-        story.append(Paragraph("<i>Bizi tercih ettiğiniz için teşekkür ederiz!</i>", styles['Italic']))
+        story.append(Paragraph("<i>Bizi tercih ettiginiz için tesekkür ederiz!</i>", styles['Italic']))
 
         doc.build(story)
         

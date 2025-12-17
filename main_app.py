@@ -9,11 +9,10 @@ from views.musteri_view import MusteriView
 from views.calisan_view import CalisanView
 from views.yonetici_view import YoneticiView
 
-# --- QT STİL SAYFASI TANIMI (MODERN TEMA) ---
 
-PRIMARY_COLOR = "#007ACC"  # Mavi (Modern vurgu)
-SECONDARY_COLOR = "#4CAF50" # Yeşil (Başarı/Onay)
-BACKGROUND_COLOR = "#F0F0F0" # Açık gri
+
+PRIMARY_COLOR = "#007ACC"  
+BACKGROUND_COLOR = "#F0F0F0" 
 TEXT_COLOR = "#333333"
 
 style_sheet = f"""
@@ -100,7 +99,7 @@ class AkilliMarketMainWindow(QMainWindow):
         self.session = Session()
         self.current_user = None
         
-        # Bu kısım, stili uygulamadan sonra çalışmalıdır
+      
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout(self.central_widget)
@@ -153,7 +152,7 @@ class AkilliMarketMainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     
-    # --- STİL UYGULAMASI ---
+
     app.setStyleSheet(style_sheet) 
     
     window = AkilliMarketMainWindow()

@@ -1,7 +1,7 @@
-# dialogs/urun_ekle_dialog.py
+
 
 from PyQt5.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton, QMessageBox
-from db_model import Urun # Urun modelini db_model dosyasından import edin
+from db_model import Urun 
 from sqlalchemy.exc import IntegrityError
 
 class UrunEkleDuzenleDialog(QDialog):

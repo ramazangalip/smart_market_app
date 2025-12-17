@@ -13,15 +13,14 @@ class LoginRegisterDialog(QDialog):
         self.setFixedSize(400, 300)
         self.session = Session()
 
-        self.stack_layout = QVBoxLayout(self) # Ana düzen
+        self.stack_layout = QVBoxLayout(self)
 
-        # Stil uygulaması için ana widget'a padding ekleyelim
+     
         self.setStyleSheet("padding: 10px;")
 
         self.login_widget = self.create_login_widget()
         self.register_widget = self.create_register_widget()
-        
-        # Başlangıçta sadece giriş ekranını göster
+      
         self.stack_layout.addWidget(self.login_widget)
 
     def create_login_widget(self):
@@ -30,13 +29,12 @@ class LoginRegisterDialog(QDialog):
         form_layout = QFormLayout()
 
         self.login_user = QLineEdit()
-        self.login_user.setPlaceholderText("Kullanıcı Adınız") # Placeholder eklendi
+        self.login_user.setPlaceholderText("Kullanıcı Adınız")
         self.login_pass = QLineEdit(echoMode=QLineEdit.Password)
-        self.login_pass.setPlaceholderText("Şifreniz") # Placeholder eklendi
-        
-        # Stilin uygulanması için bir özel Nesne Adı gerekmez, genel QPushButton stili uygulanacaktır.
+        self.login_pass.setPlaceholderText("Şifreniz") 
+
         self.login_btn = QPushButton("Giriş Yap")
-        self.login_btn.setStyleSheet("padding: 10px; font-weight: bold;") # Vurgu için padding eklendi
+        self.login_btn.setStyleSheet("padding: 10px; font-weight: bold;") 
         
         self.switch_to_register_btn = QPushButton("Hesabın yok mu? Kayıt Ol")
         self.switch_to_register_btn.setStyleSheet("background-color: #6c757d; border: 1px solid #6c757d; color: white;") # İkincil stil
@@ -62,7 +60,7 @@ class LoginRegisterDialog(QDialog):
         self.register_pass = QLineEdit(echoMode=QLineEdit.Password)
         self.register_pass.setPlaceholderText("Şifre Belirleyin")
         self.register_role = QComboBox()
-        self.register_role.addItems(['musteri', 'calisan', 'yonetici']) # Rolleri ekle
+        self.register_role.addItems(['musteri', 'calisan', 'yonetici']) 
         
         self.register_btn = QPushButton("Kayıt Ol")
         self.register_btn.setStyleSheet("background-color: #4CAF50; border: 1px solid #4CAF50; color: white; padding: 10px; font-weight: bold;") # Başarı rengi
